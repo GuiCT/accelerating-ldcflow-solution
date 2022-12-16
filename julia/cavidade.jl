@@ -105,7 +105,7 @@ function iterateOnce!(dx, dy, dt, nx::Int, ny::Int, Re::Int, u, v, A, w, b!)
         end
     end
 
-    # Solucionando sistema linear esparso usando symmlq
+    # Solucionando sistema linear esparso por método direto
     solucao = A\b!;
     # Criando vetor PSI utilizando reshape
     psi = transpose(reshape(solucao, (nx+1, ny+1)));
