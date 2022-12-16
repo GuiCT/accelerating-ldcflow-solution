@@ -26,8 +26,8 @@ function cavidade(nx::Int, ny::Int, nt::Int, Re::Int, T::Int)
     b = zeros((nx+1)*(ny+1));
     
     for p in 1:nt
-        # Obtendo psi, b e w são alterados pela função.
-        psi = iterateOnce!(dx, dy, dt, nx, ny, Re, u, v, A, b, w);
+        # Obtendo psi e novo w, b é alterado pela função.
+        psi, w = iterateOnce!(dx, dy, dt, nx, ny, Re, u, v, A, w, b);
 
         # Guardando valores de u e v
         u_old = copy(u);
@@ -86,12 +86,12 @@ function matrizPoisson(dx, dy, nx::Int, ny::Int)
 end
 
 # Executa uma iteração do algoritmo original
-function iterateOnce!(dx, dy, dt, nx::Int, ny::Int, Re::Int, u, v, A, b!, w!)
+function iterateOnce!(dx, dy, dt, nx::Int, ny::Int, Re::Int, u, v, A, w, b!)
     rx = 1/(Re*dx*dx);
     ry = 1/(Re*dy*dy);
-    w_new = copy(w!);
-    w_new[2:nx, 2:ny] = w![2:nx, 2:ny] + dt*((u[2:nx, 2:ny] .* (w![1:nx-1, 2:ny] - w![3:nx+1, 2:ny])/(2*dx)) + (v[2:nx, 2:ny] .* (w![2:nx, 1:ny-1] - w![2:nx, 3:ny+1])/(2*dy)) + rx*(w![3:nx+1, 2:ny] - 2*w![2:nx, 2:ny] + w![1:nx-1, 2:ny]) + ry*(w![2:nx, 3:ny+1] - 2*w![2:nx, 2:ny] + w![2:nx, 1:ny-1]))
-    w! = w_new;
+    w_new = copy(w);
+    w_new[2:nx, 2:ny] = w[2:nx, 2:ny] + dt*((u[2:nx, 2:ny] .* (w[1:nx-1, 2:ny] - w[3:nx+1, 2:ny])/(2*dx)) + (v[2:nx, 2:ny] .* (w[2:nx, 1:ny-1] - w[2:nx, 3:ny+1])/(2*dy)) + rx*(w[3:nx+1, 2:ny] - 2*w[2:nx, 2:ny] + w[1:nx-1, 2:ny]) + ry*(w[2:nx, 3:ny+1] - 2*w[2:nx, 2:ny] + w[2:nx, 1:ny-1]))
+
 
     # Solucionando a Equação de Poisson e Calculando PSI
     for i in 1:nx+1
@@ -111,7 +111,7 @@ function iterateOnce!(dx, dy, dt, nx::Int, ny::Int, Re::Int, u, v, A, b!, w!)
     psi = transpose(reshape(solucao, (nx+1, ny+1)));
 
     # Retornando novo w e psi.
-    return psi;
+    return psi, w_new;
 end
 
 function updateUandV!(dx, dy, nx::Int, ny::Int, psi, u!, v!)
