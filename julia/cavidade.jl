@@ -123,4 +123,4 @@ function updateUandV!(dx, dy, nx::Int, ny::Int, psi, u!, v!)
     end
 end
 
-cavidade(64, 64, 100000, 100, 100);
+# cavidade(64, 64, 100000, 100, 100);
