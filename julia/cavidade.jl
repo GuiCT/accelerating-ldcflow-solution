@@ -115,12 +115,8 @@ function iterateOnce!(dx, dy, dt, nx::Int, ny::Int, Re::Int, u, v, A, w, b!)
 end
 
 function updateUandV!(dx, dy, nx::Int, ny::Int, psi, u!, v!)
-    for i in 2:nx
-        for j in 2:ny
-            u![i, j] = 0.5 * (psi[i, j+1] - psi[i, j-1]) / dy;
-            v![i, j] = -0.5 * (psi[i+1, j] - psi[i-1, j]) / dx;
-        end
-    end
+    u![2:nx, 2:ny] = 0.5 * (psi[2:nx, 3:ny+1] - psi[2:nx, 1:ny-1]) / dy;
+    v![2:nx, 2:ny] = -0.5 * (psi[3:nx+1, 2:ny] - psi[1:nx-1, 2:ny]) / dx;
 end
 
 # cavidade(64, 64, 100000, 100, 100);
