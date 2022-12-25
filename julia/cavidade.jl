@@ -26,7 +26,7 @@ function cavidade(nx::Int, ny::Int, nt::Int, Re::Int, T::Int)
     
     for p in 1:nt
         # Obtendo psi e novo w, b é alterado pela função.
-        psi, w = iterateOnce!(dx, dy, dt, nx, ny, Re, u, v, A, w, b);
+        psi, w = umaIteracao(dx, dy, dt, nx, ny, Re, u, v, A, w, b);
 
         # Guardando valores de u e v
         u_old = copy(u);
@@ -85,7 +85,7 @@ function matrizPoisson(dx, dy, nx::Int, ny::Int)
 end
 
 # Executa uma iteração do algoritmo original
-function iterateOnce!(dx, dy, dt, nx::Int, ny::Int, Re::Int, u, v, A, w, b!)
+function umaIteracao(dx, dy, dt, nx::Int, ny::Int, Re::Int, u, v, A, w, b!)
     rx = 1/(Re*dx*dx);
     ry = 1/(Re*dy*dy);
     w_new = copy(w);
