@@ -1,6 +1,5 @@
 # Pacotes utilizados
 using SparseArrays;
-using Krylov;
 
 function cavidade(nx::Int, ny::Int, nt::Int, Re::Int, T::Int)
     dx = 30/nx;
