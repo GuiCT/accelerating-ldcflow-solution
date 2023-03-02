@@ -7,7 +7,7 @@ nx = 128;
 ny = 128;
 nt = 100000; 
 Re = 100; 
-% dt = 0.01;
+dt = 0.01;
 dx = 1/nx;
 dy = 1/ny;
 x = linspace(0,1,nx+1);
@@ -15,7 +15,6 @@ y = linspace(0,1,ny+1);
 u0 = 1; % velocidade inicial da tampa
 
 T  = 1;
-dt = T/nt;
 %-------------------------------------------------------------------------
 
 psi = zeros(nx+1,ny+1);  % Corrente
