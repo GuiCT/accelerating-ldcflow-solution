@@ -1,5 +1,0 @@
-nx,ny,Re,Paralell Environment,Tempo de execução(s),Desvio Padrão(s)
-64,64,100,"Processes",36.657274,1.1137583e-1
-64,64,100,"Threads",36.854807,8.6794833e-2
-128,128,100,"Processes",123.06499,8.1781249e-1
-128,128,100,"Threads",123.08133,6.4627162e-1

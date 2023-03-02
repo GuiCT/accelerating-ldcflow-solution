@@ -6,8 +6,8 @@ format long
 nx = 128;
 ny = 128;
 nt = 100000; 
-Re = 100; 
-dt = 0.01;
+Re = 1000; 
+dt = 0.001;
 dx = 1/nx;
 dy = 1/ny;
 x = linspace(0,1,nx+1);
