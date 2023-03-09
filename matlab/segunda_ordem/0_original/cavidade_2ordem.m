@@ -3,38 +3,35 @@ clear
 format long
 %clf
 
-nx = 64;
-ny = 64;
+nx = 128;
+ny = 128;
 nt = 100000; 
-Re = 100; 
-dx = 30/nx;
+Re = 1000; 
+dt = 0.001;
+dx = 1/nx;
 dy = 1/ny;
-x = linspace(0,30,nx+1);
-y = linspace(-0.5,0.5,ny+1);
+x = linspace(0,1,nx+1);
+y = linspace(0,1,ny+1);
+u0 = 1; % velocidade inicial da tampa
 
-T = 100;
-dt = T/nt;
-
-u0 = @(y)24*y.*(0.5 - y);  % velocidade inicial da tampa
-w0 = @(y) 48.*y - 12;
+T  = 1;
 %-------------------------------------------------------------------------
 
 psi = zeros(nx+1,ny+1);  % Corrente
 u = zeros(nx+1,ny+1);    % Velocidade
 v = zeros(nx+1,ny+1);    % Velocidade
 w = zeros(nx+1,ny+1);    % Vorticidade
-u(1,(ny/2)+1:ny+1) = u0(y((ny/2)+1:ny+1));
-w(1,(ny/2)+1:ny+1) = w0(y((ny/2)+1:ny+1));
+u(1:nx+1,ny+1) = u0;     % Velocidade inicial da tampa
 
 M = nx + 1;          % Malha computacional
-Q = nx - 1;          % Malha computacional dos pontos internos do dominio
+Q = nx - 1;          % Malha computacional dos pontos internos do dom�nio
 
-%
+
 
 %% Calculando a matriz do sistema linear da equacao de poisson
 tic
-A = sparse((nx+1)*(ny+1),(nx+1)*(ny+1)); % Matriz do sistema linear de poisson
-b = zeros((nx+1)*(ny+1),1); % Vetor independente do sistema linear de poisson
+A = sparse((nx+1)*(ny+1),(nx+1)*(ny+1)); %Matriz do sistema linear de poisson
+b = zeros((nx+1)*(ny+1),1); %Vetor independente do sistema linear de poisson
 aux = 1;
 cx = 1/(dx*dx);
 cy = 1/(dy*dy);
@@ -68,39 +65,37 @@ for i = 1:nx+1
  
    end
 end
-%
-
-
+%}
 
 for n = 1:nt
 
    
     %% Calculando w nos contornos
-    %
+    
     %Parede superior
-%     j = ny+1;
-%     for i = 1:nx+1
-%         w(i,j) = ((7/2)*psi(i,j) - 4*psi(i,j-1) + (1/2)*psi(i,j-2))/(dy^(2));
-%     end
-% 
-%     %Parede inferior
-%     j = 1;
-%     for i = 1:nx+1
-%         w(i,j) = ((7/2)*psi(i,j) - 4*psi(i,j+1) + (1/2)*psi(i,j+2))/(dy^(2));
-%     end
+    j = ny+1;
+    for i = 1:nx+1
+        w(i,j) = (-3*dy + (7/2)*psi(i,j) - 4*psi(i,j-1) + (1/2)*psi(i,j-2))/(dy^(2));
+    end
+
+    %Parede inferior
+    j = 1;
+    for i = 1:nx+1
+        w(i,j) = ((7/2)*psi(i,j) - 4*psi(i,j+1) + (1/2)*psi(i,j+2))/(dy^(2));
+    end
 
     %Parede esquerda
-%      i = 1;
-%      for j = 1:ny+1
-%      	w(i,j) = ((7/2)*psi(i,j) - 4*psi(i+1,j) + (1/2)*psi(i+2,j))/(dx^(2));
-%      end
+    i = 1;
+    for j = 1:ny+1
+    	w(i,j) = ((7/2)*psi(i,j) - 4*psi(i+1,j) + (1/2)*psi(i+2,j))/(dx^(2));
+    end
 
-%     %Parede direita
-%     i = nx+1;
-%     for j = 1:ny+1
-%     	w(i,j) = ((7/2)*psi(i,j) - 4*psi(i-1,j) + (1/2)*psi(i-2,j))/(dx^(2));
-%     end
-    %
+    %Parede direita
+    i = nx+1;
+    for j = 1:ny+1
+    	w(i,j) = ((7/2)*psi(i,j) - 4*psi(i-1,j) + (1/2)*psi(i-2,j))/(dx^(2));
+    end
+    
     %% RESOLVENDO A EQUACAO DE TRANSPORTE EXPLICITAMENTE E CALCULANDO W
     
     rx = 1/(Re*dx*dx);
@@ -117,7 +112,7 @@ for n = 1:nt
     aux = 1;
     for i = 1:nx+1
         for j = 1:ny+1
-            % psi=0 no contorno
+            %psi=0 no contorno
             if( (i==1) || (i==nx+1) || (j==1) || (j==ny+1) )
                 b(aux) = 0;
                 aux = aux+1;
@@ -176,11 +171,28 @@ for n = 1:nt
     	break;
     end
 end 
+
+
+%% Gr�ficos
+
+% subplot(2, 2, 1);
+% PlotPropriedade(u, nx, ny, 0, 0, 1, 1, 'Velocidade U');
+% set(gcf, 'renderer', 'zbuffer');
+% axis square;
+% 
+% subplot(2, 2, 2);
+% PlotPropriedade(v, nx, ny, 0, 0, 1, 1, 'Velocidade V');
+% set(gcf, 'renderer', 'zbuffer');
+% axis square;
+% 
+% subplot(2, 2, 3);
+% PlotPropriedade(psi, nx, ny, 0, 0, 1, 1, 'Corrente \psi');
+% set(gcf, 'renderer', 'zbuffer');
+% axis square;
+% 
+% figure
+% PlotStreamlines(u, v, nx, ny, 0, 0, 1, 1, 50, 50);
+% set(gcf, 'renderer', 'zbuffer');
+% axis square;
+% box on
 toc
-
-%% Graficos
-
-
-quiver(x,y,u,v)
-
-%}
