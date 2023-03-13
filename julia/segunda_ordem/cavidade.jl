@@ -19,179 +19,193 @@ Resolve o problema da cavidade com tampa móvel utilizando aproximações de seg
 Os argumentos `𝛿t`, `nt`, `xRange` e `yRange` são opcionais.
 """
 function cavidade(
-    nx::Int, ny::Int, Re::Int, δt=0.001,
-    nt::Int=10000, xRange=[0, 1], yRange=[0, 1]
+  nx::Int, ny::Int, Re::Int, δt=0.001,
+  nt::Int=10000, xRange=[0, 1], yRange=[0, 1]
 )
-    # Espaço linear de x e y a partir da quantidade de elementos e o range especificado
-    x = LinRange(xRange[1], xRange[2], nx + 1)
-    y = LinRange(yRange[1], yRange[2], ny + 1)
+  # Espaço linear de x e y a partir da quantidade de elementos e o range especificado
+  x = LinRange(xRange[1], xRange[2], nx + 1)
+  y = LinRange(yRange[1], yRange[2], ny + 1)
 
-    # δx e δy são calculados a partir da diferença entre dois adjacentes no espaço linear
-    δx = x[2] - x[1]
-    δy = y[2] - y[1]
+  # δx e δy são calculados a partir da diferença entre dois adjacentes no espaço linear
+  δx = x[2] - x[1]
+  δy = y[2] - y[1]
 
-    ψ = zeros(nx + 1, ny + 1)      # Corrente
-    u = zeros(nx + 1, ny + 1)      # Velocidade
-    v = zeros(nx + 1, ny + 1)      # Velocidade
-    ω = zeros(nx + 1, ny + 1)      # Vorticidade
+  ψ = zeros(nx + 1, ny + 1)      # Corrente
+  u = zeros(nx + 1, ny + 1)      # Velocidade
+  v = zeros(nx + 1, ny + 1)      # Velocidade
+  ω = zeros(nx + 1, ny + 1)      # Vorticidade
 
-    u[1:nx+1, ny+1] .= 1   # Velocidade inicial da tampa
+  u[1:nx+1, ny+1] .= 1   # Velocidade inicial da tampa
 
-    # Realizando a montagem da matriz de Poisson
-    A = matrizPoisson(nx, ny, δx, δy)
-    # Vetor independente do sistema
-    b = zeros((nx + 1) * (ny + 1))
+  # Realizando a montagem da matriz de Poisson
+  A = matrizPoisson(nx, ny, δx, δy)
+  # Vetor independente do sistema
+  b = zeros((nx + 1) * (ny + 1))
 
-    rx = 1 / (Re * δx * δx)
-    ry = 1 / (Re * δy * δy)
+  for iterationNumber in 1:nt
+    ω = calculoContorno!(δx, δy, ψ, ω)
+    ω = calculoVetorIndependente!(Re, δx, δy, δt, ω, u, v, b)
+    ψ = resolucaoSistemaLinear(nx, ny, b, A)
+    u₀ = copy(u)
+    v₀ = copy(v)
+    u, v = atualizandoUeV(δx, δy, ψ, u, v)
 
-    for iterationNumber in 1:nt
-        ω = calculoContorno!(δx, δy, ψ, ω)
-        ω = calculoVetorIndependente!(rx, ry, δx, δy, δt, ω, u, v, b)
-        ψ = resolucaoSistemaLinear(nx, ny, b, A);
-        uAnterior = copy(u)
-        vAnterior = copy(v)
-        u, v = atualizandoUeV(δx, δy, ψ, u, v)
+    # Calculando resíduos em u e v
+    residuoU = maximum(abs.(u - u₀))
+    residuoV = maximum(abs.(v - v₀))
+    # Printando informações do passo
+    println("Passo: ", iterationNumber, "\tResíduo (u): ", residuoU, "\tResíduo (v): ", residuoV)
 
-        # Calculando resíduos em u e v
-        residuoU = maximum(maximum(abs.(u - uAnterior)))
-        residuoV = maximum(maximum(abs.(v - vAnterior)))
-        # Printando informações do passo
-        println("Passo: ", iterationNumber, "\tResíduo (u): ", residuoU, "\tResíduo (v): ", residuoV)
-
-        # Se um dos erros for maior que 1e+8, aborta.
-        # Se o erro de ambos forem menores que 1e-5, logo, convergiu.
-        if (residuoU > 1e+8 || residuoV > 1e+8)
-            println("Erro maior que 1e+8, abortando...")
-            break
-        elseif (residuoU < 1e-5 && residuoV < 1e-5)
-            println("Convergiu!")
-            return u, v
-        end
+    # Se um dos erros for maior que 1e+8, aborta.
+    # Se o erro de ambos forem menores que 1e-5, logo, convergiu.
+    if (residuoU > 1e+8 || residuoV > 1e+8)
+      println("Erro maior que 1e+8, abortando...")
+      break
+    elseif (residuoU < 1e-5 && residuoV < 1e-5)
+      println("Convergiu!")
+      return u, v
     end
+  end
 end
 
 function matrizPoisson(nx::Int, ny::Int, δx, δy)
-    # Definição da Matriz de Poisson (densa)
-    A = zeros((nx + 1) * (ny + 1), (nx + 1) * (ny + 1))
+  # Definição da Matriz de Poisson (densa)
+  A = zeros((nx + 1) * (ny + 1), (nx + 1) * (ny + 1))
 
-    # Constantes, inverso do quadrado dos deltas
-    Δx = 1 / (δx * δx)
-    Δy = 1 / (δy * δy)
+  for i in 1:nx+1
+    for j in 1:ny+1
+      flatIndex = (i - 1) * (ny + 1) + j
+      # Contorno -> Preenche diagonal principal com 1 (identidade)
+      if (i == 1) || (i == nx + 1) || (j == 1) || (j == ny + 1)
+        A[flatIndex, flatIndex] = 1
+        # Fora do contorno -> Matriz pentadiagonal
+      else
+        # Elemento da esquerda
+        A[flatIndex, (i-2)*(ny+1)+j] = δx^-2
 
-    # Constante
-    z = -2 * (Δx + Δy)
+        # Elemento do centro
+        A[flatIndex, (i-1)*(ny+1)+j] = -2 * (δx^-2 + δy^-2)
 
-    for i in 1:nx+1
-        for j in 1:ny+1
-            flatIndex = (i - 1) * (ny + 1) + j
-            # Contorno -> Preenche diagonal principal com 1 (identidade)
-            if (i == 1) || (i == nx + 1) || (j == 1) || (j == ny + 1)
-                A[flatIndex, flatIndex] = 1
-                # Fora do contorno -> Matriz pentadiagonal
-            else
-                # Elemento da esquerda
-                A[flatIndex, (i-2)*(ny+1)+j] = Δx
+        # Elemento da direita
+        A[flatIndex, (i)*(ny+1)+j] = δx^-2
 
-                # Elemento do centro
-                A[flatIndex, (i-1)*(ny+1)+j] = z
+        # Elemento de baixo
+        A[flatIndex, (i-1)*(ny+1)+j-1] = δy^-2
 
-                # Elemento da direita
-                A[flatIndex, (i)*(ny+1)+j] = Δx
-
-                # Elemento de baixo
-                A[flatIndex, (i-1)*(ny+1)+j-1] = Δy
-
-                # Elemento de cima
-                A[flatIndex, (i-1)*(ny+1)+j+1] = Δy
-            end
-        end
+        # Elemento de cima
+        A[flatIndex, (i-1)*(ny+1)+j+1] = δy^-2
+      end
     end
+  end
 
-    # Retorna matriz esparsa
-    return SparseMatrixCSC(A)
+  # Retorna matriz esparsa
+  return SparseMatrixCSC(A)
 end
 
 function calculoContorno!(δx, δy, ψ, ω!)
-    nx = size(ω!, 1) - 1
-    ny = size(ω!, 2) - 1
+  nx, ny = size(ω!)
 
-    # Parede superior
-    ω![1:nx+1, ny+1] = (-3 * δy .+ (7 / 2) * ψ[1:nx+1, ny+1] - 4 * ψ[1:nx+1, ny] + (1 / 2) * ψ[1:nx+1, ny-1]) / (δy^(2))
+  # Parede superior
+  i = 1:nx
+  j = ny
+  ω![i, j] = (-3 * δy .+ (7 / 2) * ψ[i, j] - 4 * ψ[i, j-1] + (1 / 2) * ψ[i, j-2]) / (δy^(2))
 
-    # Parede inferior
-    ω![1:nx+1, 1] = ((7 / 2) * ψ[1:nx+1, 1] - 4 * ψ[1:nx+1, 2] + (1 / 2) * ψ[1:nx+1, 3]) / (δy^(2))
+  # Parede inferior
+  j = 1
+  ω![i, j] = ((7 / 2) * ψ[i, j] - 4 * ψ[i, j+1] + (1 / 2) * ψ[i, j+2]) / (δy^(2))
 
-    # Parede esquerda
-    ω![1, 1:ny+1] = ((7 / 2) * ψ[1, 1:ny+1] - 4 * ψ[2, 1:ny+1] + (1 / 2) * ψ[3, 1:ny+1]) / (δx^(2))
+  # Parede esquerda
+  i = 1
+  j = 1:ny
+  ω![i, j] = ((7 / 2) * ψ[i, j] - 4 * ψ[i+1, j] + (1 / 2) * ψ[i+2, j]) / (δx^(2))
 
-    # Parede direita
-    ω![nx+1, 1:ny+1] = ((7 / 2) * ψ[nx+1, 1:ny+1] - 4 * ψ[nx, 1:ny+1] + (1 / 2) * ψ[nx-1, 1:ny+1]) / (δx^(2))
+  # Parede direita
+  i = nx
+  ω![i, j] = ((7 / 2) * ψ[i, j] - 4 * ψ[i-1, j] + (1 / 2) * ψ[i-2, j]) / (δx^(2))
 
-    return ω!
+  return ω!
 end
 
-function calculoVetorIndependente!(rx, ry, δx, δy, δt, ω, u, v, b!)
-    nx = size(ω, 1) - 1
-    ny = size(ω, 2) - 1
+function calculoVetorIndependente!(Re, δx, δy, δt, ω₀, u, v, b!)
+  nx, ny = size(ω₀)
 
-    # Atualizando ω com base nos valores anteriores
-    ωNovo = copy(ω)
-    ωNovo[2:nx, 2:ny] = ω[2:nx, 2:ny] + δt * (
-        (u[2:nx, 2:ny] .* (ω[1:nx-1, 2:ny] - ω[3:nx+1, 2:ny]) ./ (2 * δx)) +
-        (v[2:nx, 2:ny] .* (ω[2:nx, 1:ny-1] - ω[2:nx, 3:ny+1]) ./ (2 * δy)) +
-        rx * (ω[3:nx+1, 2:ny] - 2 * ω[2:nx, 2:ny] + ω[1:nx-1, 2:ny]) +
-        ry * (ω[2:nx, 3:ny+1] - 2 * ω[2:nx, 2:ny] + ω[2:nx, 1:ny-1])
-    )
+  # Atualizando ω com base nos valores anteriores
+  i = 2:nx-1
+  j = 2:ny-1
 
-    for i in 2:nx
-        for j in 2:ny
-            flatIndex = (i - 1) * (ny + 1) + j
-            b![flatIndex] = -ωNovo[i, j]
-        end
+  ω = copy(ω₀)
+  # ω = ω + ∂ω/∂t
+  # ∂ω/∂t = (1/Re)*∇²ω - u * ∂ω/∂x - v * ∂ω/∂y
+  # = (∂²ω/∂x² + ∂²ω/∂y²)/Re - u * ∂ω/∂x - v * ∂ω/∂y
+  ω[i, j] += δt * (
+    # (∂²ω/∂x² + ∂²ω/∂y²)/Re
+    (
+      # ∂²ω/∂x²
+      (ω₀[i.+1, j] - 2 * ω₀[i, j] + ω₀[i.-1, j]) / δx^2 +
+      # ∂²ω/∂y²
+      (ω₀[i, j.+1] - 2 * ω₀[i, j] + ω₀[i, j.-1]) / δy^2
+    ) / Re -
+    # u * ∂ω/∂x
+    u[i, j] .* (ω₀[i.+1, j] - ω₀[i.-1, j]) / (2 * δx) -
+    # v * ∂ω/∂y
+    v[i, j] .* (ω₀[i, j.+1] - ω₀[i, j.-1]) / (2 * δy)
+  )
+
+  for i in 2:nx-1
+    for j in 2:ny-1
+      flatIndex = (i - 1) * ny + j
+      b![flatIndex] = -ω[i, j]
     end
+  end
 
-    return ωNovo
+  return ω
 end
 
 function resolucaoSistemaLinear(nx::Int, ny::Int, b, A)
-    solucao = A \ b # Resolve o sistema linear 
-    
-    # Realizando reshape da solução, atribuindo à variável ψ
-    # Transpose é necessário para que a matriz seja row-wise, ao invés de column-wise.
-    ψ = transpose(reshape(solucao, (nx + 1, ny + 1)))
-    return ψ;
+  solucao = A \ b # Resolve o sistema linear 
+
+  # Realizando reshape da solução, atribuindo à variável ψ
+  # Transpose é necessário para que a matriz seja row-wise, ao invés de column-wise.
+  ψ = transpose(reshape(solucao, (nx + 1, ny + 1)))
+  return ψ
 end
 
 function atualizandoUeV(δx, δy, ψ, u!, v!)
-    nx = size(ψ, 1) - 1
-    ny = size(ψ, 2) - 1
+  nx = size(ψ, 1)
+  ny = size(ψ, 2)
 
-    # Atualizando u e v
-    # Próximo do contorno, utilizando diferença centrada
-    u![2, 2:ny] = (ψ[2, 3:ny+1] - ψ[2, 1:ny-1]) / (2 * δy)
-    u![nx, 2:ny] = (ψ[nx, 3:ny+1] - ψ[nx, 1:ny-1]) / (2 * δy)
-    u![2:nx, 2] = (ψ[2:nx, 3] - ψ[2:nx, 1]) / (2 * δy)
-    u![2:nx, ny] = (ψ[2:nx, ny+1] - ψ[2:nx, ny-1]) / (2 * δy)
-    v![2, 2:ny] = -(ψ[3, 2:ny] - ψ[1, 2:ny]) / (2 * δx)
-    v![nx, 2:ny] = -(ψ[nx+1, 2:ny] - ψ[nx-1, 2:ny]) / (2 * δx)
-    v![2:nx, 2] = -(ψ[3:nx+1, 2] - ψ[1:nx-1, 2]) / (2 * δx)
-    v![2:nx, ny] = -(ψ[3:nx+1, ny] - ψ[1:nx-1, ny]) / (2 * δx)
+  # Atualizando u e v
+  # Próximo do contorno, utilizando diferença centrada
+  i = 2:nx-1
+  j = 2:ny-1
 
-    # Para os demais valores, utiliza diferença finita de quarta ordem
-    u![3:nx-1, 3:ny-1] = (
-        2 * ψ[3:nx-1, 1:ny-3] -
-        16 * ψ[3:nx-1, 2:ny-2] +
-        16 * ψ[3:nx-1, 4:ny] -
-        2 * ψ[3:nx-1, 5:ny+1]
-    ) / (24 * δy)
+  for i in [2, nx - 1]
+    u![i, j] = (ψ[i, j.+1] - ψ[i, j.-1]) / (2 * δy)
+    v![i, j] = -(ψ[i+1, j] - ψ[i-1, j]) / (2 * δx)
+  end
 
-    v![3:nx-1, 3:ny-1] = -(
-        2 * ψ[1:nx-3, 3:ny-1] -
-        16 * ψ[2:nx-2, 3:ny-1] +
-        16 * ψ[4:nx, 3:ny-1] -
-        2 * ψ[5:nx+1, 3:ny-1]
-    ) / (24 * δx)
+  for j in [2, ny - 1]
+    u![i, j] = (ψ[i, j+1] - ψ[i, j-1]) / (2 * δy)
+    v![i, j] = -(ψ[i.+1, j] - ψ[i.-1, j]) / (2 * δx)
+  end
 
-    return u!, v!
+  # Para os demais valores, utiliza diferença finita de quarta ordem
+  i = 3:nx-2
+  j = 3:ny-2
+
+  u![i, j] = (
+    2 * ψ[i, j.-2] -
+    16 * ψ[i, j.-1] +
+    16 * ψ[i, j.+1] -
+    2 * ψ[i, j.+2]
+  ) / (24 * δy)
+
+  v![i, j] = -(
+    2 * ψ[i.-2, j] -
+    16 * ψ[i.-1, j] +
+    16 * ψ[i.+1, j] -
+    2 * ψ[i.+2, j]
+  ) / (24 * δx)
+
+  return u!, v!
 end
