@@ -100,9 +100,7 @@ results.v = v;
 end
 
 function A = matrizPoisson(nx, ny, dx, dy)
-A = zeros((nx+1)*(ny+1), (nx+1)*(ny+1)); % Matriz do sistema linear
-% Inicializa como matriz densa para evitar problemas com indexing esparso
-% Ocupa mais memória temporariamente
+A = sparse((nx+1)*(ny+1), (nx+1)*(ny+1)); % Matriz do sistema linear
 flatIndex = 1;
 cx = 1/(dx*dx);
 cy = 1/(dy*dy);
@@ -131,9 +129,6 @@ for i = 1:nx+1
         flatIndex = flatIndex+1;
     end
 end
-
-% Transforma A em matriz esparsa
-A = sparse(A);
 end
 
 function w = calculoContorno(nx, ny, dx, dy, psi, w)

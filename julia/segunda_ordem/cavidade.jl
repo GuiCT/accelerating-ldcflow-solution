@@ -40,7 +40,7 @@ function cavidade(
   # Realizando a montagem da matriz de Poisson
   A = matrizPoisson(nx, ny, δx, δy)
   # Vetor independente do sistema
-  b = zeros((nx + 1) * (ny + 1))
+  b = spzeros((nx + 1) * (ny + 1))
 
   for iterationNumber in 1:nt
     ω = calculoContorno!(δx, δy, ψ, ω)
@@ -69,8 +69,8 @@ function cavidade(
 end
 
 function matrizPoisson(nx::Int, ny::Int, δx, δy)
-  # Definição da Matriz de Poisson (densa)
-  A = zeros((nx + 1) * (ny + 1), (nx + 1) * (ny + 1))
+  # Inicializando matriz esparsa
+  A = spzeros((nx + 1) * (ny + 1), (nx + 1) * (ny + 1))
 
   for i in 1:nx+1
     for j in 1:ny+1
@@ -98,8 +98,7 @@ function matrizPoisson(nx::Int, ny::Int, δx, δy)
     end
   end
 
-  # Retorna matriz esparsa
-  return SparseMatrixCSC(A)
+  return A
 end
 
 function calculoContorno!(δx, δy, ψ, ω!)
