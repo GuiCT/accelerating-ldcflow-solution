@@ -40,7 +40,7 @@ function cavidade(
   # Realizando a montagem da matriz de Poisson
   A = matrizPoisson(nx, ny, δx, δy)
   # Vetor independente do sistema
-  b = spzeros((nx + 1) * (ny + 1))
+  b = zeros((nx + 1) * (ny + 1))
 
   for iterationNumber in 1:nt
     ω = calculoContorno!(δx, δy, ψ, ω)
