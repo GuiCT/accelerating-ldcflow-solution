@@ -1,5 +1,6 @@
 # Pacote SparseArrays é utilizado para criação de matriz esparsa de Poisson
 using SparseArrays;
+using LinearAlgebra;
 
 """
     cavidade(nx::Int, ny::Int, Re::Int, δt = 0.001,
@@ -38,14 +39,20 @@ function cavidade(
   u[1:nx+1, ny+1] .= 1   # Velocidade inicial da tampa
 
   # Realizando a montagem da matriz de Poisson
-  A = matrizPoisson(nx, ny, δx, δy)
+  # E armazenando resultado da fatoração LU
+  # A fatoração LU é utilizada na resolução do sistema linear esparso
+  # Como a matriz é constante durante a execução do código, o resultado
+  # Da fatoração LU também é. Sendo a tarefa mais intensiva do processo
+  # de resolução do Sistema Linear, isso melhora de forma patente a performance
+  # do código em questão.
+  A_LU = lu(matrizPoisson(nx, ny, δx, δy))
   # Vetor independente do sistema
   b = zeros((nx + 1) * (ny + 1))
 
   for iterationNumber in 1:nt
     ω = calculoContorno!(δx, δy, ψ, ω)
     ω = calculoVetorIndependente!(Re, δx, δy, δt, ω, u, v, b)
-    ψ = resolucaoSistemaLinear(nx, ny, b, A)
+    ψ = resolucaoSistemaLinear(nx, ny, b, A_LU)
     u₀ = copy(u)
     v₀ = copy(v)
     u, v = atualizandoUeV(δx, δy, ψ, u, v)
@@ -160,8 +167,8 @@ function calculoVetorIndependente!(Re, δx, δy, δt, ω₀, u, v, b!)
   return ω
 end
 
-function resolucaoSistemaLinear(nx::Int, ny::Int, b, A)
-  solucao = A \ b # Resolve o sistema linear 
+function resolucaoSistemaLinear(nx::Int, ny::Int, b, A_LU)
+  solucao = A_LU \ b # Resolve o sistema linear 
 
   # Realizando reshape da solução, atribuindo à variável ψ
   # Transpose é necessário para que a matriz seja row-wise, ao invés de column-wise.
