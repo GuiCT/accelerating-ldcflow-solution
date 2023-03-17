@@ -1,6 +1,6 @@
 # Pacote SparseArrays é utilizado para criação de matriz esparsa de Poisson
 using SparseArrays;
-using LinearAlgebra;
+include("../multigrid_cs/mgcs.jl")
 
 """
     cavidade(nx::Int, ny::Int, Re::Int, δt = 0.001,
@@ -38,21 +38,10 @@ function cavidade(
 
   u[1:nx+1, ny+1] .= 1   # Velocidade inicial da tampa
 
-  # Realizando a montagem da matriz de Poisson
-  # E armazenando resultado da fatoração LU
-  # A fatoração LU é utilizada na resolução do sistema linear esparso
-  # Como a matriz é constante durante a execução do código, o resultado
-  # Da fatoração LU também é. Sendo a tarefa mais intensiva do processo
-  # de resolução do Sistema Linear, isso melhora de forma patente a performance
-  # do código em questão.
-  A_LU = lu(matrizPoisson(nx, ny, δx, δy))
-  # Vetor independente do sistema
-  b = zeros((nx + 1) * (ny + 1))
-
   for iterationNumber in 1:nt
     ω = calculoContorno!(δx, δy, ψ, ω)
-    ω = calculoVetorIndependente!(Re, δx, δy, δt, ω, u, v, b)
-    ψ = resolucaoSistemaLinear(nx, ny, b, A_LU)
+    ω = atualizandoω(Re, δx, δy, δt, ω, u, v)
+    ψ = resolucaoSistemaLinearMultigrid(ψ, ω, δx, δy)
     u₀ = copy(u)
     v₀ = copy(v)
     u, v = atualizandoUeV(δx, δy, ψ, u, v)
@@ -73,39 +62,6 @@ function cavidade(
       return u, v
     end
   end
-end
-
-function matrizPoisson(nx::Int, ny::Int, δx, δy)
-  # Inicializando matriz esparsa
-  A = spzeros((nx + 1) * (ny + 1), (nx + 1) * (ny + 1))
-
-  for i in 1:nx+1
-    for j in 1:ny+1
-      flatIndex = (i - 1) * (ny + 1) + j
-      # Contorno -> Preenche diagonal principal com 1 (identidade)
-      if (i == 1) || (i == nx + 1) || (j == 1) || (j == ny + 1)
-        A[flatIndex, flatIndex] = 1
-        # Fora do contorno -> Matriz pentadiagonal
-      else
-        # Elemento da esquerda
-        A[flatIndex, (i-2)*(ny+1)+j] = δx^-2
-
-        # Elemento do centro
-        A[flatIndex, (i-1)*(ny+1)+j] = -2 * (δx^-2 + δy^-2)
-
-        # Elemento da direita
-        A[flatIndex, (i)*(ny+1)+j] = δx^-2
-
-        # Elemento de baixo
-        A[flatIndex, (i-1)*(ny+1)+j-1] = δy^-2
-
-        # Elemento de cima
-        A[flatIndex, (i-1)*(ny+1)+j+1] = δy^-2
-      end
-    end
-  end
-
-  return A
 end
 
 function calculoContorno!(δx, δy, ψ, ω!)
@@ -132,7 +88,7 @@ function calculoContorno!(δx, δy, ψ, ω!)
   return ω!
 end
 
-function calculoVetorIndependente!(Re, δx, δy, δt, ω₀, u, v, b!)
+function atualizandoω(Re, δx, δy, δt, ω₀, u, v)
   nx, ny = size(ω₀)
 
   # Atualizando ω com base nos valores anteriores
@@ -157,23 +113,12 @@ function calculoVetorIndependente!(Re, δx, δy, δt, ω₀, u, v, b!)
     v[i, j] .* (ω₀[i, j.+1] - ω₀[i, j.-1]) / (2 * δy)
   )
 
-  for i in 2:nx-1
-    for j in 2:ny-1
-      flatIndex = (i - 1) * ny + j
-      b![flatIndex] = -ω[i, j]
-    end
-  end
-
   return ω
 end
 
-function resolucaoSistemaLinear(nx::Int, ny::Int, b, A_LU)
-  solucao = A_LU \ b # Resolve o sistema linear 
-
-  # Realizando reshape da solução, atribuindo à variável ψ
-  # Transpose é necessário para que a matriz seja row-wise, ao invés de column-wise.
-  ψ = transpose(reshape(solucao, (nx + 1, ny + 1)))
-  return ψ
+function resolucaoSistemaLinearMultigrid(ψ, ω, δx, δy)
+  res, _ = multigrid_CS(ψ, -ω, δx, δy)
+  return res
 end
 
 function atualizandoUeV(δx, δy, ψ, u!, v!)
