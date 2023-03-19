@@ -2,6 +2,14 @@
 using SparseArrays;
 using LinearAlgebra;
 
+struct LDCFSolution
+  x::LinRange
+  y::LinRange
+  u::Matrix
+  v::Matrix
+  converge::Bool
+end
+
 """
     cavidade(nx::Int, ny::Int, Re::Int, δt = 0.001,
     nt = 10000, xRange = [0, 1], yRange = [0, 1])
@@ -22,7 +30,7 @@ Os argumentos `𝛿t`, `nt`, `xRange` e `yRange` são opcionais.
 function cavidade(
   nx::Int, ny::Int, Re::Int, δt=0.001,
   nt::Int=10000, xRange=[0, 1], yRange=[0, 1]
-)
+)::Union{LDCFSolution, Nothing}
   # Espaço linear de x e y a partir da quantidade de elementos e o range especificado
   x = LinRange(xRange[1], xRange[2], nx + 1)
   y = LinRange(yRange[1], yRange[2], ny + 1)
@@ -55,7 +63,7 @@ function cavidade(
     ψ = resolucaoSistemaLinear(nx, ny, b, A_LU)
     u₀ = copy(u)
     v₀ = copy(v)
-    u, v = atualizandoUeV(δx, δy, ψ, u, v)
+    u, v = atualizandoUeV_4a_ordem(δx, δy, ψ, u, v)
 
     # Calculando resíduos em u e v
     residuoU = maximum(abs.(u - u₀))
@@ -67,12 +75,18 @@ function cavidade(
     # Se o erro de ambos forem menores que 1e-5, logo, convergiu.
     if (residuoU > 1e+8 || residuoV > 1e+8)
       println("Erro maior que 1e+8, abortando...")
-      break
+      return Nothing
     elseif (residuoU < 1e-5 && residuoV < 1e-5)
       println("Convergiu!")
-      return u, v
+      return LDCFSolution(
+        x, y, u, v, true
+      )
     end
   end
+
+  return LDCFSolution(
+    x, y, u, v, false
+  )
 end
 
 function matrizPoisson(nx::Int, ny::Int, δx, δy)
@@ -176,42 +190,84 @@ function resolucaoSistemaLinear(nx::Int, ny::Int, b, A_LU)
   return ψ
 end
 
-function atualizandoUeV(δx, δy, ψ, u!, v!)
+function atualizandoUeV_2a_ordem(δx, δy, ψ, u!, v!)
   nx = size(ψ, 1)
   ny = size(ψ, 2)
 
-  # Atualizando u e v
-  # Próximo do contorno, utilizando diferença centrada
-  i = 2:nx-1
+  @inbounds Threads.@threads for i in 2:nx-1
+    for j in 2:ny-1
+      u![i, j] = (ψ[i, j+1] - ψ[i, j-1]) / (2 * δy)
+      v![i, j] = -(ψ[i+1, j] - ψ[i-1, j]) / (2 * δx)
+    end
+  end
+
+  return u!, v!
+end
+
+function atualizandoUeV_4a_ordem(δx, δy, ψ, u!, v!)
+  nx = size(ψ, 1)
+  ny = size(ψ, 2)
+
+  # Quando i ou j são iguais a 2, utiliza diferenças descentradas com
+  # grid [-1, 0, 1, 2] e coeficientes [-2, -3, 6, -1] / 6.
+  # Quando i ou j estão entre 3 e (nx ou ny)-2, utiliza diferenças centradas
+  # com grid [-2, -1, 1, 2] e coeficientes [1, -8, 8, -1] / 12
+  # Por fim, quando i ou j são iguais a (nx ou ny)-1, utiliza diferenças descentradas
+  # com grid [-2, -1, 0, 1] e coeficientes [1, -6, 3, 2] / 6 
+
+  # Atualizando u = ∂ψ/∂y
+  i = 2:ny-1
+  @inbounds Threads.@threads for j in 2:nx-1
+    if j == 2
+      u![i, j] = (
+        -2 * ψ[i, j-1] -
+        3 * ψ[i, j] +
+        6 * ψ[i, j+1] -
+        ψ[i, j+2]
+      ) / (6 * δy)
+    elseif j < nx - 1
+      u![i, j] = (
+        ψ[i, j-2] -
+        8 * ψ[i, j-1] +
+        8 * ψ[i, j+1] -
+        ψ[i, j+2]
+      ) / (12 * δy)
+    else
+      u![i, j] = (
+        ψ[i, j-2] -
+        6 * ψ[i, j-1] +
+        3 * ψ[i, j] +
+        2 * ψ[i, j+1]
+      ) / (6 * δy)
+    end
+  end
+
+  # Atualizando v = - ∂ψ/∂x
   j = 2:ny-1
-
-  for i in [2, nx - 1]
-    u![i, j] = (ψ[i, j.+1] - ψ[i, j.-1]) / (2 * δy)
-    v![i, j] = -(ψ[i+1, j] - ψ[i-1, j]) / (2 * δx)
+  @inbounds Threads.@threads for i in 2:nx-1
+    if i == 2
+      v![i, j] = -(
+        -2 * ψ[i-1, j] -
+        3 * ψ[i, j] +
+        6 * ψ[i+1, j] -
+        ψ[i+2, j]
+      ) / (6 * δx)
+    elseif i < nx - 1
+      v![i, j] = -(
+        ψ[i-2, j] -
+        8 * ψ[i-1, j] +
+        8 * ψ[i+1, j] -
+        ψ[i+2, j]
+      ) / (12 * δx)
+    else
+      v![i, j] = -(
+        ψ[i-2, j] -
+        6 * ψ[i-1, j] +
+        3 * ψ[i, j] +
+        2 * ψ[i+1, j]
+      ) / (6 * δx)
+    end
   end
-
-  for j in [2, ny - 1]
-    u![i, j] = (ψ[i, j+1] - ψ[i, j-1]) / (2 * δy)
-    v![i, j] = -(ψ[i.+1, j] - ψ[i.-1, j]) / (2 * δx)
-  end
-
-  # Para os demais valores, utiliza diferença finita de quarta ordem
-  i = 3:nx-2
-  j = 3:ny-2
-
-  u![i, j] = (
-    2 * ψ[i, j.-2] -
-    16 * ψ[i, j.-1] +
-    16 * ψ[i, j.+1] -
-    2 * ψ[i, j.+2]
-  ) / (24 * δy)
-
-  v![i, j] = -(
-    2 * ψ[i.-2, j] -
-    16 * ψ[i.-1, j] +
-    16 * ψ[i.+1, j] -
-    2 * ψ[i.+2, j]
-  ) / (24 * δx)
 
   return u!, v!
 end
