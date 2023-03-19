@@ -216,8 +216,8 @@ function atualizandoUeV_4a_ordem(δx, δy, ψ, u!, v!)
   # com grid [-2, -1, 0, 1] e coeficientes [1, -6, 3, 2] / 6 
 
   # Atualizando u = ∂ψ/∂y
-  i = 2:ny-1
-  @inbounds Threads.@threads for j in 2:nx-1
+  i = 2:nx-1
+  @inbounds Threads.@threads for j in 2:ny-1
     if j == 2
       u![i, j] = (
         -2 * ψ[i, j-1] -
@@ -225,7 +225,7 @@ function atualizandoUeV_4a_ordem(δx, δy, ψ, u!, v!)
         6 * ψ[i, j+1] -
         ψ[i, j+2]
       ) / (6 * δy)
-    elseif j < nx - 1
+    elseif j < ny - 1
       u![i, j] = (
         ψ[i, j-2] -
         8 * ψ[i, j-1] +
