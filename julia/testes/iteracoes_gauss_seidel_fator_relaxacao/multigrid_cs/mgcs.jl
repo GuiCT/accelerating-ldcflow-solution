@@ -35,7 +35,7 @@ Os argumentos `tol` e `max_iter` são opcionais.
 function multigrid_CS(
   F::Matrix{Float64}, TF::Matrix{Float64},
   δx::Float64, δy::Float64, relax_factor_gs,
-  tol::Float64=1e-5, max_iter::Int64=1000)
+  tol::Float64=1e-5, max_iter::Int64=5000)
 
   grid_1 = Grid(copy(F), copy(TF), δx, δy)
   residual_1 = zeros(size(grid_1.F))
@@ -45,15 +45,13 @@ function multigrid_CS(
   residual_3 = zeros(size(grid_3.F))
   grid_4 = halfGrid(grid_3)
 
-  iterationsGaussSeidel = 0
-
   for iterationNumber in 1:max_iter
     jacobi_2D!(grid_1)
     calculateResidual!(grid_1, residual_1)
 
     iter_error = maximum(abs.(residual_1))
     if (iter_error < tol)
-      return grid_1.F, iterationsGaussSeidel
+      return (grid_1.F, iterationNumber)
     end
 
     restriction!(grid_2, residual_1)
@@ -65,14 +63,7 @@ function multigrid_CS(
     calculateResidual!(grid_3, residual_3)
 
     restriction!(grid_4, residual_3)
-    ret = teste_gauss_seidel(grid_4, relax_factor_gs)
-    if ret == -1
-      return -1
-    else
-      F, it_gs_temp = ret
-    end
-    iterationsGaussSeidel += it_gs_temp
-    gauss_seidel_2D!(grid_4)
+    gauss_seidel_2D!(grid_4, relax_factor_gs)
 
     correction_3 = polynomial_interp_2D(grid_4)
     grid_3.F .+= correction_3
@@ -81,6 +72,14 @@ function multigrid_CS(
     correction_1 = polynomial_interp_2D(grid_2)
     grid_1.F .+= correction_1
   end
+
+  calculateResidual!(grid_1, residual_1)
+  iter_error = maximum(abs.(residual_1))
+  if (iter_error < tol)
+    return (grid_1.F, max_iter)
+  end
+  
+  throw(ErrorException("Erro de convergência: MULTIGRID"))
 end
 
 """
@@ -112,7 +111,7 @@ Aplica o método de Gauss-Seidel em duas dimensões a partir do valor de F e ter
 
 Os parâmetros de fator de relaxamento e número máximo de iterações podem ser alterados.
 """
-function gauss_seidel_2D!(grid::Grid, relax_factor=1.9, max_iter=200)
+function gauss_seidel_2D!(grid::Grid, relax_factor=1.9, max_iter=100)
   β = grid.δx^2 / grid.δy^2
   nx, ny = size(grid.F)
 
@@ -203,31 +202,4 @@ function polynomial_interp_2D(grid_coarse::Grid)
   ) / 2
 
   return correction
-end
-
-"Testando fatores de relaxação e iterações até convergência"
-function teste_gauss_seidel(grid::Grid, relax_factor, max_iter=300)
-  F = copy(grid.F)
-  β = grid.δx^2 / grid.δy^2
-  nx, ny = size(F)
-
-  for nIter in 1:max_iter
-    F⁰ = copy(F)
-    for i in 2:nx-1
-      for j in 2:ny-1
-        LDE = (
-          F[i+1, j] + F[i-1, j] +
-          β * (F[i, j+1] + F[i, j-1]) -
-          grid.δx^2 * grid.TF[i, j]
-        ) / (2 + 2 * β)
-        F[i, j] += relax_factor * (LDE - F[i, j])
-      end
-    end
-    it_error = maximum(abs.(F - F⁰))
-    if it_error < 1e-5
-      return F, nIter
-    end
-  end
-
-  return -1
 end
