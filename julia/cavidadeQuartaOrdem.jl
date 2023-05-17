@@ -47,7 +47,7 @@ function cavidadeQuartaOrdem(
     ψ[2:n, 2:n] .= resolucaoSistemaLinear(δx, -ω, LDLT)
     u₀ = copy(u)
     v₀ = copy(v)
-    u, v = atualizandoUVQuartaOrdem!(δx, δy, ψ, u, v)
+    u, v = atualizandoUVSegundaOrdem!(δx, δy, ψ, u, v)
 
     # Calculando resíduos em u e v
     residuoU = maximum(abs.(u - u₀))
@@ -63,13 +63,13 @@ function cavidadeQuartaOrdem(
     elseif (residuoU < 1e-5 && residuoV < 1e-5)
       println("Convergiu!")
       return LDCFSolution(
-        x, y, u, v, true
+        x, y, u, v, Re, true
       )
     end
   end
 
   return LDCFSolution(
-    x, y, u, v, false
+    x, y, u, v, Re, false
   )
 end
 
