@@ -1,0 +1,9 @@
+name = "LDCFlow"
+uuid = "b392e50a-a03e-4ab7-88f6-30c953010910"
+authors = ["GuiCT <gtomiasi@gmail.com>"]
+version = "0.1.0"
+
+[deps]
+DelimitedFiles = "8bb1440f-4735-579b-a4ab-409b98df4dab"
+LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
+SparseArrays = "2f01184e-e22b-5df5-ae63-d93ebab69eaf"
