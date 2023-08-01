@@ -1,0 +1,5 @@
+# Abordagem _data-driven_ para resolução do problema
+
+Nesse diretório, a ideia é executar o algoritmo original de quarta ordem, armazenar os resultados utilizados para diferentes números de Reynolds, e a partir desses dados, treinar uma rede neural _Autoencoder_, utilizada para reduzir a dimensionalidade do problema em questão. Após isso, a representação latente gerada por essa rede será utilizada como entrada para uma rede neural _Long Short-Term Memory_ (LSTM), que será treinada para prever o próximo passo da solução. Após obter o próximo passo da solução, o _Autoencoder_ será utilizado para reconstruir a solução completa, e o processo se repete, até atingir convergência.
+
+Trata-se de uma nova abordagem para resolução do problema, uma investigação da viabilidade de aplicar essa abordagem nesse problema em questão.
