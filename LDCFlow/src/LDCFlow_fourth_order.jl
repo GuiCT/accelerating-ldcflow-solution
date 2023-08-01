@@ -3,10 +3,10 @@ using SparseArrays;
 function _generatePatternVector(
   size::Int, default::Number,
   value::Number, each::Int,
-  offset::Int = 0)::Vector{Float64}
+  offset::Int=0)::Vector{Float64}
 
   vector = fill(default, size)
-  for i ∈ (each + offset):each:size
+  for i ∈ (each+offset):each:size
     vector[i] = value
   end
 
@@ -17,17 +17,17 @@ end
 Matriz de coeficientes para o sistema linear esparso de quarta ordem.
 """
 function matrix4Order(linMesh::LinearMesh)
-  n = linMesh.nx
+  n = linMesh.nx - 1
   return spdiagm(
-    - n => _generatePatternVector( # [1, 1, ..., 0, 1, 1, ...]
-        (n - 2)  * (n - 1) - 1,
-        1.0,
-        0.0,
-        n - 1
-      ),
-    - (n - 1) => fill(4.0, (n - 2) * (n - 1)), # [4, 4, ..., 4]
-    - (n - 2) => _generatePatternVector( # [1, 1, ..., 0, 1, 1, ...]
-      (n - 2)  * (n - 1) + 1,
+    -n => _generatePatternVector( # [1, 1, ..., 0, 1, 1, ...]
+      (n - 2) * (n - 1) - 1,
+      1.0,
+      0.0,
+      n - 1
+    ),
+    -(n - 1) => fill(4.0, (n - 2) * (n - 1)), # [4, 4, ..., 4]
+    -(n - 2) => _generatePatternVector( # [1, 1, ..., 0, 1, 1, ...]
+      (n - 2) * (n - 1) + 1,
       1.0,
       0.0,
       n - 1,
@@ -47,7 +47,7 @@ function matrix4Order(linMesh::LinearMesh)
       n - 1
     ),
     n - 2 => _generatePatternVector( # [1, 1, ..., 0, 1, 1, ...]
-      (n - 2)  * (n - 1) + 1,
+      (n - 2) * (n - 1) + 1,
       1.0,
       0.0,
       n - 1,
@@ -55,7 +55,7 @@ function matrix4Order(linMesh::LinearMesh)
     ),
     n - 1 => fill(4.0, (n - 2) * (n - 1)), # [4, 4, ..., 4]
     n => _generatePatternVector( # [1, 1, ..., 0, 1, 1, ...]
-      (n - 2)  * (n - 1) - 1,
+      (n - 2) * (n - 1) - 1,
       1.0,
       0.0,
       n - 1
@@ -67,8 +67,8 @@ end
 Solução do sistema linear para o problema de Poisson utilizando diferenças
 finitas de quarta ordem.
 """
-function systemSolve4Order(domain::LDCFDomain)
-  f, δ, LDLT = -domain.ω, domain.linMesh.δx, domain.A
+function systemSolve4Order!(domain!::LDCFDomain)
+  f, δ, LDLT = -domain!.ω, domain!.linMesh.δx, domain!.A
 
   totalSize = size(f)[1]
   innerSize = totalSize - 2
@@ -77,7 +77,7 @@ function systemSolve4Order(domain::LDCFDomain)
   @inbounds Threads.@threads for j ∈ 1:innerSize
     for i ∈ 1:innerSize
       # T[i, j] -> R[(i - 1) * sizeInterno + j] (2D -> 1D)
-      R[(i - 1) * innerSize + j] = δ^2 * (
+      R[(i-1)*innerSize+j] = δ^2 * (
         f[i+2, j+1] +
         f[i+1, j] +
         8 * f[i+1, j+1] +
@@ -92,9 +92,7 @@ function systemSolve4Order(domain::LDCFDomain)
   # Utiliza Fatoração LDLT de A
   x = LDLT \ R # Resolve o sistema linear
 
-  # Retorna o vetor x no formato de matriz
-  # Função reshape não realiza novas alocações
-  return transpose(reshape(x, (innerSize, innerSize)))
+  domain!.ψ[2:end-1, 2:end-1] = transpose(reshape(x, (innerSize, innerSize)))
 end
 
 """
@@ -116,7 +114,7 @@ function updateVelocity4Order!(domain!::LDCFDomain)
   @inbounds Threads.@threads for i in 2:nx-1
     V![i, 2, 1] = (
       # -3 * ψ[i, 1] == 0
-      - 10 * ψ[i, 2] +
+      -10 * ψ[i, 2] +
       18 * ψ[i, 3] -
       6 * ψ[i, 4] +
       ψ[i, 5]
@@ -132,19 +130,19 @@ function updateVelocity4Order!(domain!::LDCFDomain)
     end
 
     V![i, ny-1, 1] = (
-        -ψ[i, ny-4] +
-        6 * ψ[i, ny-3] -
-        18 * ψ[i, ny-2] +
-        10 * ψ[i, ny-1]
-        # 3 * ψ[i, ny] == 0
-      ) / (12 * δy)
+      -ψ[i, ny-4] +
+      6 * ψ[i, ny-3] -
+      18 * ψ[i, ny-2] +
+      10 * ψ[i, ny-1]
+      # 3 * ψ[i, ny] == 0
+    ) / (12 * δy)
   end
 
   # Atualizando v = - ∂ψ/∂x
   @inbounds Threads.@threads for j in 2:ny-1
     V![2, j, 2] = -(
       # -3 * ψ[1, j] == 0
-      - 10 * ψ[2, j] +
+      -10 * ψ[2, j] +
       18 * ψ[3, j] -
       6 * ψ[4, j] +
       ψ[5, j]

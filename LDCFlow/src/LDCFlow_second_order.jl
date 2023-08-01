@@ -67,8 +67,8 @@ end
 Solução do sistema linear para o problema de Poisson utilizando diferenças
 finitas de segunda ordem.
 """
-function systemSolve2Order(domain::LDCFDomain)
-  linMesh, ω, LU = domain.linMesh, domain.ω, domain.A
+function systemSolve2Order!(domain!::LDCFDomain)
+  linMesh, ω, LU = domain!.linMesh, domain!.ω, domain!.A
   nx, ny = linMesh.nx, linMesh.ny
   b = zeros(nx * ny)
   # Formando vetor independente b a partir de ω
@@ -76,11 +76,11 @@ function systemSolve2Order(domain::LDCFDomain)
   # Internamente -> -ω
   @inbounds Threads.@threads for j ∈ 2:ny-1
     for i ∈ 2:nx-1
-      b[(i - 1) * ny + j] = - ω[i, j]
+      b[(i-1)*ny+j] = -ω[i, j]
     end
   end
   x = LU \ b
-  return transpose(reshape(x, (ny, nx)))
+  domain!.ψ = transpose(reshape(x, (ny, nx)))
 end
 
 """

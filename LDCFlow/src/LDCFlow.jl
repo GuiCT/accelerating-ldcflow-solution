@@ -54,22 +54,22 @@ function _ldcf_base(
   )
 
   if method == :second_order
-    solveFunction = systemSolve2Order
-    updateVelocityFunction = updateVelocity2Order!
+    solveFunction! = systemSolve2Order!
+    updateVelocityFunction! = updateVelocity2Order!
     simulationDomain.A = lu(matrix2Order(simulationDomain.linMesh))
   elseif method == :fourth_order
-    solveFunction = systemSolve4Order
-    updateVelocityFunction = updateVelocity4Order!
-    simulationDomain.A = lu(matrix4Order(simulationDomain.linMesh))
+    solveFunction! = systemSolve4Order!
+    updateVelocityFunction! = updateVelocity4Order!
+    simulationDomain.A = ldlt(matrix4Order(simulationDomain.linMesh))
   else
     throw(ArgumentError("Método não implementado, utilize :second_order ou :fourth_order"))
   end
 
   for iterationNumber in 1:simulationParameters.maxIter
     simulationDomain.ω = updateVorticity(simulationDomain, simulationParameters)
-    simulationDomain.ψ = solveFunction(simulationDomain)
+    solveFunction!(simulationDomain)
     V₀ = copy(simulationDomain.V)
-    updateVelocityFunction(simulationDomain)
+    updateVelocityFunction!(simulationDomain)
     code = callback(
       simulationDomain,
       simulationParameters,
