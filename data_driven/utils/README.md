@@ -1,0 +1,5 @@
+- `__init__.py`: arquivo obrigatório para inicializar um módulo Python
+- `file_loader.py`: carrega tensores de um arquivo HDF5, agrupando todas as _keys_ em um único _array_
+- `file_splitter.py`: toma um _array_, o separa em duas metades e armazena cada uma delas como um _dataset_ em um mesmo arquivo
+- `hdf5_file_loader.py`: implementa um _DataLoader_ que carrega dados de um arquivo diretamente para uma rede neural modelada usando a biblioteca Keras
+- `mean_max_error.py`: implementa uma função de _loss_ customizada: calcula a média (no eixo 0) do erro máximo (nos eixos 1, 2 e 3) para o tensor utilizado no treinamento: é uma métrica mais adequada do que o erro médio para todos os valores contido nesse tensor.
