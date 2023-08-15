@@ -8,13 +8,12 @@ function cavidade(
   n::Int64, Re::Int64,
   δt::Float64, nt::Int64=typemax(Int64),
   num_of_points=3,
-  use_descenters=false,
   range::Tuple{Float64, Float64}=(0.0, 1.0);
   atol::Float64=1e-6, rtol::Float64=1e-5, limit::Float64=1e+8
 )::Union{LDCFSolution, Nothing}
   d, _, δ, _, ψ, u, v, ω = realizaAlocacoes(n, n, range, range)
 
-  factor = factorize(generate_coeff_matrix(n - 1, δ, num_of_points, use_descenters))
+  factor = factorize(generate_coeff_matrix(n - 1, δ, num_of_points))
   
   for iterationNumber in 1:nt
     ω = calculoContornoω!(δ, δ, ψ, ω)

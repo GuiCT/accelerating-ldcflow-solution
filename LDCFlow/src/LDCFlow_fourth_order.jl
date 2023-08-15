@@ -92,7 +92,7 @@ function systemSolve4Order!(domain!::LDCFDomain)
   # Utiliza Fatoração LDLT de A
   x = LDLT \ R # Resolve o sistema linear
 
-  domain!.ψ[2:end-1, 2:end-1] = transpose(reshape(x, (innerSize, innerSize)))
+  domain!.ψ[2:end-1, 2:end-1] .= transpose(reshape(x, (innerSize, innerSize)))
 end
 
 """

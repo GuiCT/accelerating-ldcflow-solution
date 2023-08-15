@@ -1,6 +1,7 @@
 module LDCFlow
 
 include("./LDCFlow_base.jl")
+include("./LDCFlow_fdm.jl")
 include("./LDCFlow_second_order.jl")
 include("./LDCFlow_fourth_order.jl")
 
@@ -12,19 +13,19 @@ function _default_callback(
   domain::LDCFDomain,
   parameters::LDCFParameters,
   iterationNumber::Int64,
-  V₀::Array{Float64, 3}
+  V₀::Array{Float64,3}
 )
   residual_u = maximum(abs.(domain.V[:, :, 1] - V₀[:, :, 1]))
   residual_v = maximum(abs.(domain.V[:, :, 2] - V₀[:, :, 2]))
   @info "Iteração $(iterationNumber): Resíduos: $(residual_u), $(residual_v)"
   if (residual_u > parameters.maxRes || residual_v > parameters.maxRes)
     @error "Resíduo máximo atingido, cancelando simulação."
-    return -1
+    return :divergenceToHighResidual
   elseif (residual_u < parameters.tol && residual_v < parameters.tol)
     @info "Convergiu dentro da tolerância especificada."
-    return 1
+    return :convergenceWithinTolerance
   else
-    return 0
+    return :keep
   end
 end
 
@@ -33,13 +34,26 @@ function _ldcf_base(
   Re::Float64, δt::Float64,
   method::Symbol;
   callback::Function=_default_callback,
-  xRange::Tuple{Float64, Float64} = (0.0, 1.0),
-  yRange::Tuple{Float64, Float64} = (0.0, 1.0),
-  u₀::Float64 = 1.0,
-  tol::Float64 = 1e-5,
-  maxRes::Float64 = 1e+8,
-  maxIter::Int64 = typemax(Int64)
-)
+  xRange::Tuple{Float64,Float64}=(0.0, 1.0),
+  yRange::Tuple{Float64,Float64}=(0.0, 1.0),
+  u₀::Float64=1.0,
+  tol::Float64=1e-5,
+  maxRes::Float64=1e+8,
+  maxIter::Int64=typemax(Int64),
+  order::Int=2
+)::Tuple{LDCFSolution,LDCFStats}
+  t1_overhead = time()
+  if method == :second_order
+    order = 2
+  elseif method == :fourth_order
+    order = 4
+  elseif method == :generic_fdm
+  else
+    throw(ArgumentError("Método não implementado"))
+  end
+
+  order::Int8 = Int8(order)
+
   simulationDomain = prepareSimulation(
     (xRange, nx),
     (yRange, ny),
@@ -50,23 +64,35 @@ function _ldcf_base(
     δt,
     tol,
     maxRes,
-    maxIter
+    maxIter,
+    order
   )
 
   if method == :second_order
-    solveFunction! = systemSolve2Order!
+    solveFunction! = systemSolveFDM!
     updateVelocityFunction! = updateVelocity2Order!
-    simulationDomain.A = lu(matrix2Order(simulationDomain.linMesh))
+    simulationDomain.A = factorize(generateCoefficientMatrix(simulationDomain.linMesh, order))
   elseif method == :fourth_order
     solveFunction! = systemSolve4Order!
     updateVelocityFunction! = updateVelocity4Order!
     simulationDomain.A = ldlt(matrix4Order(simulationDomain.linMesh))
+  elseif method == :generic_fdm
+    solveFunction! = systemSolveFDM!
+    updateVelocityFunction! = updateVelocityFDM!
+    simulationDomain.A = factorize(generateCoefficientMatrix(simulationDomain.linMesh, order))
+    simulationDomain.grids,
+    simulationDomain.coefs = generateFDMGridAndCoefficients(order)
   else
-    throw(ArgumentError("Método não implementado, utilize :second_order ou :fourth_order"))
+    throw(ArgumentError("Método não implementado"))
   end
 
+  overhead_duration = time() - t1_overhead
+
+  t1_execution = time()
+  f_iterationNumber = 1
+  f_code = 0
   for iterationNumber in 1:simulationParameters.maxIter
-    simulationDomain.ω = updateVorticity(simulationDomain, simulationParameters)
+    simulationDomain.ω = updateVorticity!(simulationDomain, simulationParameters)
     solveFunction!(simulationDomain)
     V₀ = copy(simulationDomain.V)
     updateVelocityFunction!(simulationDomain)
@@ -75,36 +101,44 @@ function _ldcf_base(
       simulationParameters,
       iterationNumber,
       V₀)
-    if code != 0
-      return LDCFSolution(
-        simulationDomain.linMesh,
-        simulationDomain.V,
-        iterationNumber)
+    if code != :keep
+      f_iterationNumber = iterationNumber
+      f_code = code
+      break
     end
   end
 
-  return LDCFSolution(
-    simulationDomain.linMesh,
-    simulationDomain.V,
-    simulationParameters.maxIter)
+  execution_duration = time() - t1_execution
+  return (
+    LDCFSolution(
+      simulationDomain.linMesh,
+      simulationDomain.V
+    ),
+    LDCFStats(
+      f_code,
+      method,
+      f_iterationNumber,
+      overhead_duration,
+      execution_duration,
+      execution_duration / f_iterationNumber
+    )
+  )
 end
 
 function LDCF2Order(
-  nx::Int64, ny::Int64,
-  Re::Float64, δt::Float64;
+  n::Int64, Re::Float64, δt::Float64;
   callback::Function=_default_callback,
-  xRange::Tuple{Float64, Float64} = (0.0, 1.0),
-  yRange::Tuple{Float64, Float64} = (0.0, 1.0),
-  u₀::Float64 = 1.0,
-  tol::Float64 = 1e-5,
-  maxRes::Float64 = 1e+8,
-  maxIter::Int64 = typemax(Int64)
+  range::Tuple{Float64,Float64}=(0.0, 1.0),
+  u₀::Float64=1.0,
+  tol::Float64=1e-5,
+  maxRes::Float64=1e+8,
+  maxIter::Int64=typemax(Int64)
 )
   return _ldcf_base(
-    nx, ny, Re, δt, :second_order,
+    n, n, Re, δt, :second_order,
     callback=callback,
-    xRange=xRange,
-    yRange=yRange,
+    xRange=range,
+    yRange=range,
     u₀=u₀,
     tol=tol,
     maxRes=maxRes,
@@ -115,11 +149,11 @@ end
 function LDCF4Order(
   n::Int64, Re::Float64, δt::Float64;
   callback::Function=_default_callback,
-  range::Tuple{Float64, Float64} = (0.0, 1.0),
-  u₀::Float64 = 1.0,
-  tol::Float64 = 1e-5,
-  maxRes::Float64 = 1e+8,
-  maxIter::Int64 = typemax(Int64)
+  range::Tuple{Float64,Float64}=(0.0, 1.0),
+  u₀::Float64=1.0,
+  tol::Float64=1e-5,
+  maxRes::Float64=1e+8,
+  maxIter::Int64=typemax(Int64)
 )
   return _ldcf_base(
     n, n, Re, δt, :fourth_order,
@@ -133,5 +167,27 @@ function LDCF4Order(
   )
 end
 
-export LDCF2Order, LDCF4Order, LDCFDomain, LDCFParameters
+function LDCFNOrder(
+  n::Int64, Re::Float64, δt::Float64, order::Int;
+  callback::Function=_default_callback,
+  range::Tuple{Float64,Float64}=(0.0, 1.0),
+  u₀::Float64=1.0,
+  tol::Float64=1e-5,
+  maxRes::Float64=1e+8,
+  maxIter::Int64=typemax(Int64)
+)
+  return _ldcf_base(
+    n, n, Re, δt, :generic_fdm,
+    callback=callback,
+    xRange=range,
+    yRange=range,
+    u₀=u₀,
+    tol=tol,
+    maxRes=maxRes,
+    maxIter=maxIter,
+    order=order
+  )
+end
+
+export LDCF2Order, LDCF4Order, LDCFNOrder, LDCFDomain, LDCFParameters, LDCFSolution, LDCFStats
 end # module LDCFLow
