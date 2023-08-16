@@ -20,7 +20,7 @@ const COEFS_UNTIL_14 = Dict(
 Função que gera a matriz para resolução da Equação de Poisson
 utilizando determinada ordem.
 """
-function generateCoefficientMatrix(linMesh::LinearMesh, order::Int8)
+function generateCoefficientMatrix(linMesh::LinearMesh, order::Int)
   n = linMesh.nx - 2
   δ = linMesh.δx
   @assert order % 2 == 0 "Ordem deve ser par"
@@ -49,7 +49,7 @@ function systemSolveFDM!(domain!::LDCFDomain)
   domain!.ψ[2:nx-1, 2:ny-1] .= transpose(reshape(x, (ny - 2, nx - 2)))
 end
 
-function generateFDMGridAndCoefficients(order::Int8)
+function generateFDMGridAndCoefficients(order::Int)
   grids = Vector{Tuple{Int64,Int64}}(undef, order - 1)
   for i in 1:order-1
     grids[i] = (-i, order - i)

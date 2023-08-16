@@ -79,7 +79,7 @@ struct LDCFParameters
   tol::Float64
   maxRes::Float64
   maxIter::Int64
-  order::Int8
+  order::Int
 end
 
 """

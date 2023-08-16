@@ -52,8 +52,6 @@ function _ldcf_base(
     throw(ArgumentError("Método não implementado"))
   end
 
-  order::Int8 = Int8(order)
-
   simulationDomain = prepareSimulation(
     (xRange, nx),
     (yRange, ny),
@@ -89,8 +87,8 @@ function _ldcf_base(
   overhead_duration = time() - t1_overhead
 
   t1_execution = time()
-  f_iterationNumber = 1
-  f_code = 0
+  f_iterationNumber = 0
+  f_code = :outOfLoops
   for iterationNumber in 1:simulationParameters.maxIter
     simulationDomain.ω = updateVorticity!(simulationDomain, simulationParameters)
     solveFunction!(simulationDomain)
@@ -106,6 +104,10 @@ function _ldcf_base(
       f_code = code
       break
     end
+  end
+
+  if f_code == :outOfLoops
+    f_iterationNumber = simulationParameters.maxIter
   end
 
   execution_duration = time() - t1_execution
@@ -126,7 +128,7 @@ function _ldcf_base(
 end
 
 function LDCF2Order(
-  n::Int64, Re::Float64, δt::Float64;
+  n::Int64, Re::Real, δt::Float64;
   callback::Function=_default_callback,
   range::Tuple{Float64,Float64}=(0.0, 1.0),
   u₀::Float64=1.0,
@@ -135,7 +137,7 @@ function LDCF2Order(
   maxIter::Int64=typemax(Int64)
 )
   return _ldcf_base(
-    n, n, Re, δt, :second_order,
+    n, n, Float64(Re), δt, :second_order,
     callback=callback,
     xRange=range,
     yRange=range,
@@ -147,7 +149,7 @@ function LDCF2Order(
 end
 
 function LDCF4Order(
-  n::Int64, Re::Float64, δt::Float64;
+  n::Int64, Re::Real, δt::Float64;
   callback::Function=_default_callback,
   range::Tuple{Float64,Float64}=(0.0, 1.0),
   u₀::Float64=1.0,
@@ -156,7 +158,7 @@ function LDCF4Order(
   maxIter::Int64=typemax(Int64)
 )
   return _ldcf_base(
-    n, n, Re, δt, :fourth_order,
+    n, n, Float64(Re), δt, :fourth_order,
     callback=callback,
     xRange=range,
     yRange=range,
@@ -168,7 +170,7 @@ function LDCF4Order(
 end
 
 function LDCFNOrder(
-  n::Int64, Re::Float64, δt::Float64, order::Int;
+  n::Int64, Re::Real, δt::Float64, order::Int;
   callback::Function=_default_callback,
   range::Tuple{Float64,Float64}=(0.0, 1.0),
   u₀::Float64=1.0,
@@ -177,7 +179,7 @@ function LDCFNOrder(
   maxIter::Int64=typemax(Int64)
 )
   return _ldcf_base(
-    n, n, Re, δt, :generic_fdm,
+    n, n, Float64(Re), δt, :generic_fdm,
     callback=callback,
     xRange=range,
     yRange=range,
