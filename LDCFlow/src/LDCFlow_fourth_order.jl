@@ -77,7 +77,7 @@ function systemSolve4Order!(domain!::LDCFDomain)
   @inbounds Threads.@threads for j ∈ 1:innerSize
     for i ∈ 1:innerSize
       # T[i, j] -> R[(i - 1) * sizeInterno + j] (2D -> 1D)
-      R[(i-1)*innerSize+j] = δ^2 * (
+      R[(i-1)*innerSize+j] = -δ^2 * (
         f[i+2, j+1] +
         f[i+1, j] +
         8 * f[i+1, j+1] +

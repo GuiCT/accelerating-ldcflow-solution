@@ -1,3 +1,5 @@
+using MKL;
+using Pardiso;
 using FiniteDifferences;
 using SparseArrays;
 using LinearAlgebra;
@@ -42,10 +44,11 @@ Solução do sistema linear para o problema de Poisson utilizando diferenças
 finitas.
 """
 function systemSolveFDM!(domain!::LDCFDomain)
-  linMesh, ω, LDLT = domain!.linMesh, domain!.ω, domain!.A
+  linMesh, ω, ps, A = domain!.linMesh, domain!.ω, domain!.ps, domain!.A
   nx, ny = linMesh.nx, linMesh.ny
-  b = copy(reshape(transpose(-ω[2:nx-1, 2:ny-1]), (nx - 2) * (ny - 2)))
-  x = LDLT \ b
+  b = copy(reshape(transpose(ω[2:nx-1, 2:ny-1]), (nx - 2) * (ny - 2)))
+  x = zeros((nx - 2) * (ny - 2))
+  pardiso(ps, x, tril(A), b)
   domain!.ψ[2:nx-1, 2:ny-1] .= transpose(reshape(x, (ny - 2, nx - 2)))
 end
 

@@ -1,3 +1,6 @@
+using MKL;
+using Pardiso;
+using Pardiso: AbstractPardisoSolver
 using FiniteDifferences;
 using SparseArrays;
 using LinearAlgebra;
@@ -51,7 +54,7 @@ Domínio da simulação
 - ψ: Corrente
 - ω: Vorticidade
 - V: Velocidade
-- A: Fatoração esparsa utilizada para solução do sistema (LU, LDLt, etc)
+- A: Matriz simétrica positiva definida
 - coefs: Coeficientes utilizados no cálculo da velocidade (V = (u, v))
 - grids: Offsets utilizados no cálculo da velocidade
 """
@@ -60,9 +63,10 @@ mutable struct LDCFDomain
   ψ::Matrix{Float64}
   ω::Matrix{Float64}
   V::Array{Float64,3}
-  A::Union{Nothing,Any}
-  coefs::Union{Nothing, Vector{Vector{Float64}}}
-  grids::Union{Nothing, Vector{Tuple{Int64,Int64}}}
+  A::Union{Nothing, SparseMatrixCSC}
+  coefs::Union{Nothing,Vector{Vector{Float64}}}
+  grids::Union{Nothing,Vector{Tuple{Int64,Int64}}}
+  ps::Union{Nothing,AbstractPardisoSolver}
 end
 
 """
@@ -120,6 +124,7 @@ function prepareSimulation(
     ψ,
     ω,
     V,
+    nothing,
     nothing,
     nothing,
     nothing

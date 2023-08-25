@@ -1,5 +1,7 @@
 module LDCFlow
 
+using LinearAlgebra;
+
 include("./LDCFlow_base.jl")
 include("./LDCFlow_fdm.jl")
 include("./LDCFlow_second_order.jl")
@@ -69,21 +71,29 @@ function _ldcf_base(
   if method == :second_order
     solveFunction! = systemSolveFDM!
     updateVelocityFunction! = updateVelocity2Order!
-    simulationDomain.A = factorize(generateCoefficientMatrix(simulationDomain.linMesh, order))
+    simulationDomain.A = -generateCoefficientMatrix(simulationDomain.linMesh, order)
   elseif method == :fourth_order
     solveFunction! = systemSolve4Order!
     updateVelocityFunction! = updateVelocity4Order!
-    simulationDomain.A = ldlt(matrix4Order(simulationDomain.linMesh))
+    simulationDomain.A = -matrix4Order(simulationDomain.linMesh)
   elseif method == :generic_fdm
     solveFunction! = systemSolveFDM!
     updateVelocityFunction! = updateVelocityFDM!
-    simulationDomain.A = factorize(generateCoefficientMatrix(simulationDomain.linMesh, order))
+    simulationDomain.A = -generateCoefficientMatrix(simulationDomain.linMesh, order)
     simulationDomain.grids,
     simulationDomain.coefs = generateFDMGridAndCoefficients(order)
   else
     throw(ArgumentError("Método não implementado"))
   end
-
+  ps = MKLPardisoSolver()
+  pardisoinit(ps)
+  set_iparm!(ps, 12, 1)
+  set_phase!(ps, 12)
+  set_matrixtype!(ps, 2)
+  set_nprocs!(ps, BLAS.get_num_threads())
+  pardiso(ps, zeros((nx - 1) * (ny - 1)), tril(simulationDomain.A), zeros((nx - 1) * (ny - 1)))
+  set_phase!(ps, 33)
+  simulationDomain.ps = ps
   overhead_duration = time() - t1_overhead
 
   t1_execution = time()
