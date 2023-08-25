@@ -1,5 +1,6 @@
-using SparseArrays
-using LinearAlgebra
+using FiniteDifferences;
+using SparseArrays;
+using LinearAlgebra;
 
 """
 Malha linear
@@ -19,12 +20,28 @@ end
 Resultado obtido
 - mesh: Coordenadas dos pontos no espaço
 - V: Velocidade em cada ponto do domínio
-- numberOfIterations: Número de iterações realizadas
 """
 struct LDCFSolution
   mesh::LinearMesh
-  V::Array{Float64, 3}
+  V::Array{Float64,3}
+end
+
+"""
+Dados sobre a execução do método
+- code: Motivo de parada do método
+- method: Método utilizado
+- numberOfIterations: Número de iterações realizadas
+- overheadTime: Tempo de preparação do método (s)
+- executionTime: Tempo de execução do método (s)
+- meanIterationTime: Tempo médio de cada iteração (s)
+"""
+struct LDCFStats
+  code::Symbol
+  method::Symbol
   numberOfIterations::Int64
+  overheadTime::Float64
+  executionTime::Float64
+  meanIterationTime::Float64
 end
 
 """
@@ -35,13 +52,17 @@ Domínio da simulação
 - ω: Vorticidade
 - V: Velocidade
 - A: Fatoração esparsa utilizada para solução do sistema (LU, LDLt, etc)
+- coefs: Coeficientes utilizados no cálculo da velocidade (V = (u, v))
+- grids: Offsets utilizados no cálculo da velocidade
 """
 mutable struct LDCFDomain
   linMesh::LinearMesh
   ψ::Matrix{Float64}
   ω::Matrix{Float64}
-  V::Array{Float64, 3}
-  A::Union{Nothing, Any}
+  V::Array{Float64,3}
+  A::Union{Nothing,Any}
+  coefs::Union{Nothing, Vector{Vector{Float64}}}
+  grids::Union{Nothing, Vector{Tuple{Int64,Int64}}}
 end
 
 """
@@ -50,6 +71,7 @@ Parâmetros da simulação
 - tol: Tolerância utilizada na simulação
 - maxRes: Resíduo máximo tolerado na simulação
 - maxIter: Número máximo de iterações permitidas na simulação
+- order: Ordem da aproximação utilizada na simulação
 """
 struct LDCFParameters
   Re::Float64
@@ -57,6 +79,7 @@ struct LDCFParameters
   tol::Float64
   maxRes::Float64
   maxIter::Int64
+  order::Int
 end
 
 """
@@ -66,8 +89,8 @@ Preparação para execução do algoritmo.
 - Construção do domínio e agrupamento dos parâmetros de simulação
 """
 function prepareSimulation(
-  x::Tuple{Tuple{Float64, Float64}, Int64},
-  y::Tuple{Tuple{Float64, Float64}, Int64},
+  x::Tuple{Tuple{Float64,Float64},Int64},
+  y::Tuple{Tuple{Float64,Float64},Int64},
   u₀::Float64)::LDCFDomain
   # Checa se `x` e `y` são crescentes
   xRange, yRange = x[1], y[1]
@@ -91,11 +114,14 @@ function prepareSimulation(
   V = zeros(nx, ny, 2)
   # Velocidade inicial da tampa móvel
   V[1:nx, ny, 1] .= u₀
+
   return LDCFDomain(
     linMesh,
     ψ,
     ω,
     V,
+    nothing,
+    nothing,
     nothing
   )
 end
@@ -107,16 +133,16 @@ function _updateOuterVorticity!(domain!::LDCFDomain)
 
   @inbounds Threads.@threads for i in 2:nx-1
     # Parede inferior
-    ω[i, 1] = ((1 / 2) * ψ[i, 3] -4 * ψ[i, 2]) / δy^2
+    ω[i, 1] = ((1 / 2) * ψ[i, 3] - 4 * ψ[i, 2]) / δy^2
     # Parede superior
-    ω[i, ny] = ((1 / 2) * ψ[i, ny-2] -4 * ψ[i, ny-1] - 3 * δy) / δy^2
+    ω[i, ny] = ((1 / 2) * ψ[i, ny-2] - 4 * ψ[i, ny-1] - 3 * δy) / δy^2
   end
 
   @inbounds Threads.@threads for j in 2:ny-1
     # Parede esquerda
-    ω[1, j] = ((1 / 2) * ψ[3, j] -4 * ψ[2, j]) / δx^2
+    ω[1, j] = ((1 / 2) * ψ[3, j] - 4 * ψ[2, j]) / δx^2
     # Parede direita
-    ω[nx, j] = ((1 / 2) * ψ[nx-2, j] -4 * ψ[nx-1, j]) / δx^2
+    ω[nx, j] = ((1 / 2) * ψ[nx-2, j] - 4 * ψ[nx-1, j]) / δx^2
   end
 end
 
@@ -127,9 +153,9 @@ Função que atualiza os valores de ω a partir da fórmula:
 
 ∂ω/∂t = (∂²ω/∂x² + ∂²ω/∂y²)/Re - u⋅∂ω/∂x - v⋅∂ω/∂y
 """
-function updateVorticity(domain!::LDCFDomain, params::LDCFParameters)
+function updateVorticity!(domain!::LDCFDomain, params::LDCFParameters)
   _updateOuterVorticity!(domain!)
-  
+
   linMesh, ω₀, V = domain!.linMesh, domain!.ω, domain!.V
   nx, ny = linMesh.nx, linMesh.ny
   δx, δy = linMesh.δx, linMesh.δy
