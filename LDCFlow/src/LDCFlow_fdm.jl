@@ -31,10 +31,24 @@ function generateCoefficientMatrix(linMesh::LinearMesh, order::Int)
     Array(fdm.coefs)
   end
   offsets = -(order ÷ 2):(order÷2)
-  a = spdiagm([offsets[i] => fill(coefs[i], n - abs(offsets[i])) for i ∈ eachindex(offsets)]...)
+  coefs[order÷2+1] = coefs[order÷2+1] * 2
+  vertical_offsets = offsets * n
+  offsets_dict = Dict(
+    offsets[i] => fill(
+      coefs[i],
+      n^2 - abs(offsets[i])
+    ) for i in eachindex(offsets)
+  )
+  vertical_offsets_dict = Dict(
+    vertical_offsets[i] => fill(
+      coefs[i],
+      n^2 - abs(vertical_offsets[i])
+    ) for i in eachindex(vertical_offsets)
+  )
+  merge!(offsets_dict, vertical_offsets_dict)
+  a = spdiagm(offsets_dict...)
   a = a / δ^2
-  id = I(n)
-  return kron(a, id) + kron(id, a)
+  return a
 end
 
 """
